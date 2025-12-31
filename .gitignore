@@ -1,2 +1,3 @@
 nutritag_env/
+.DS_Store
 .streamlit/secrets.toml
