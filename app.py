@@ -6,7 +6,7 @@ import os
 # 配置及資料載入
 # ==========================
 st.set_page_config(
-    page_title="NutriTag AI - 營養標示計算助手",
+    page_title="NutriTag｜台灣營養標示計算工具",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -49,7 +49,8 @@ DAILY_VALUES = {
 # 分步操作界面
 # ==========================
 
-st.title("NutriTag AI - 營養標示計算助手")
+st.title("NutriTag｜台灣營養標示計算工具")
+st.caption("依據台灣食品標示法規，快速產生營養標示")
 st.sidebar.header("篩選條件")
 
 # ==========================
