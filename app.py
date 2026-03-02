@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import numpy as np
 
 # ==========================
 # 配置及資料載入
@@ -57,8 +58,9 @@ st.sidebar.header("篩選條件")
 # 初始化 Session State
 # ==========================
 if "selected_items" not in st.session_state:
-    # 確保包含所有欄位
-    st.session_state.selected_items = pd.DataFrame(columns=df.columns.tolist() + ["比例(%)"])
+    # 使用 df 的 empty slice 保留欄位與 dtype，並新增比例欄為 float
+    st.session_state.selected_items = df.iloc[0:0].copy()
+    st.session_state.selected_items["比例(%)"] = pd.Series(dtype="float64")
 
 st.sidebar.header("加入原料")
 
@@ -98,6 +100,27 @@ if sample != "請選擇":
         )
         st.sidebar.success(f"已加入：{sample}")
 
+# ➕ 新增空白原料（允許使用者手動輸入名稱與數值）
+if st.sidebar.button("➕ 新增空白原料"):
+    empty_row = {}
+    for col in st.session_state.selected_items.columns:
+        if col == "食品分類":
+            # 預設放一個標記，方便使用者知道可編輯
+            empty_row[col] = "自訂"
+        elif col in NUMERIC_FIELDS:
+            empty_row[col] = np.nan
+        elif col == "比例(%)":
+            empty_row[col] = 0.0
+        else:
+            empty_row[col] = ""
+
+    row_df = pd.DataFrame([empty_row])
+    st.session_state.selected_items = pd.concat(
+        [st.session_state.selected_items, row_df],
+        ignore_index=True
+    )
+    st.sidebar.success("已新增空白原料，請在表格編輯名稱與數值。")
+
 # --------------------------
 # 顯示目前「已選原料清單」
 # --------------------------
@@ -109,23 +132,31 @@ else:
     # ===========================
     # 1. 比例編輯（移到最上方）
     # ===========================
-    st.markdown("#### 請右滑編輯各原料比例（%）")
+    st.markdown("#### 請右滑編輯各原料比例（%）或編輯樣品/數值")
+
+    # 建立動態 column_config：比例欄與 CSV 的數值欄都用 NumberColumn
+    col_config = {
+        "比例(%)": st.column_config.NumberColumn(
+            "比例 (%)",
+            min_value=0.0,
+            max_value=100.0,
+            step=0.1,
+            format="%.1f",
+        )
+    }
+
+    for nf in NUMERIC_FIELDS:
+        # 若欄位存在於資料表中才加入設定
+        if nf in st.session_state.selected_items.columns:
+            col_config[nf] = st.column_config.NumberColumn(nf, format="%.2f", step=0.1)
 
     edited_data = st.data_editor(
         st.session_state.selected_items,
         use_container_width=True,
         hide_index=True,
         key="selected_items_table",
-        disabled=["食品分類", "樣品名稱"] + [c for c in df.columns if c != "比例(%)"],
-        column_config={
-            "比例(%)": st.column_config.NumberColumn(
-                "比例 (%)",
-                min_value=0.0,
-                max_value=100.0,
-                step=0.1,
-                format="%.1f",
-            )
-        },
+        disabled=[],  # 全欄位開放編輯
+        column_config=col_config,
     )
 
     # --- 比例加總檢核 ---
