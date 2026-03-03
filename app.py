@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import numpy as np
+from weasyprint import HTML
 
 # ==========================
 # 配置及資料載入
@@ -500,6 +501,19 @@ def generate_nutrition_label_html(final_100g, input_serving_size, input_pack_ser
             border-bottom: 2px solid #000;
             align-items: flex-end;
         }
+
+        @page {
+            size: auto;
+            margin: 10mm;
+        }
+        
+        @media print {
+            .nutrition-box {
+                width: 6cm;
+                max-width: 6cm;
+                box-shadow: none;
+            }
+        }
     </style>
     """
 
@@ -713,7 +727,26 @@ if show_dv:
     st.caption("＊參考值未訂定")
     st.caption("每日參考值：熱量 2000 大卡、蛋白質 60 公克、脂肪 60 公克、飽和脂肪 18 公克、碳水化合物 300 公克、鈉 2000 毫克。")
 
+st.markdown("---")
+st.markdown("### 下載營養標示")
+try:
+    pdf_bytes = HTML(string=html_label).write_pdf()
 
+    st.download_button(
+        label="⬇️ 下載營養標示（PDF｜列印用）",
+        data=pdf_bytes,
+        file_name="nutrition_label.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
+
+except Exception as e:
+    st.warning("⚠️ 目前無法產生 PDF，請稍後再試或聯絡開發者。")
+    
+st.caption(
+    "此營養標示為系統依配方比例試算之結果，"
+    "實際標示仍應依產品實際檢驗與相關法規進行最終確認。"
+)
 
 # ==========================
 # Footer：資料來源聲明
