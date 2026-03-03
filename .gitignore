@@ -1,3 +1,8 @@
 nutritag_env/
 .DS_Store
 .streamlit/secrets.toml
+.venv/
+venv/
+__pycache__/
+*.pyc
+.建議使用虛擬環境/
