@@ -5,4 +5,7 @@ nutritag_env/
 venv/
 __pycache__/
 *.pyc
-.建議使用虛擬環境/
+＃/
+建議使用虛擬環境/
+.venv/
+venv/
