@@ -1,16 +1,39 @@
 # NutriTag｜台灣營養標示計算工具
 
-這是一個使用 **Streamlit** 建立的簡易網頁應用程式，用於根據台灣食品標示法規計算營養標示。
-使用者可以從資料庫中挑選食品原料，設定各原料比例與每一份量，並即時產生營養標示 HTML。
+NutriTag 是一個使用 **Streamlit** 開發的網頁工具，
+
+用於依據台灣食品標示相關法規，
+
+協助進行 **食品配方營養成分試算與營養標示規劃**。
+
+本工具適合應用於：
+
+- 食品研發與配方設計
+- 營養標示初步試算
+- 包裝標示規劃與版面配置參考
+
+## 🔧 功能特色
+
+- ✅ 依「食品分類 / 原料名稱」搜尋營養成分資料
+- ✅ 支援搜尋與分頁瀏覽，適合大量資料查找
+- ✅ 可將多項原料加入配方並設定比例（總和需為 100%）
+- ✅ 自動加權計算每 100 公克營養成分
+- ✅ 依每份量與包裝份數換算營養標示
+- ✅ 可選擇是否顯示每日參考值（DV%）
+- ✅ 即時產生三欄式營養標示 HTML
+- ✅ 支援多種標籤尺寸，可直接列印或轉 PDF
+
+---
 
 ## 📁 專案結構
 
 ```
-NutriTag_TWHub/
-├─ app.py                   # 主應用程式
-├─ preprocess_nutritag_data.py  # (可選) 數據預處理腳本
-├─ requirements.txt         # Python 依賴清單
-└─ selected_columns.csv     # 包含食品營養成分的資料庫 (CSV)
+NutriTag/
+├─ app.py # 主程式（Streamlit App）
+├─ selected_columns.csv # 原料營養成分資料庫
+├─ preprocess_nutritag_data.py # （選用）資料前處理腳本
+├─ requirements.txt # Python 套件需求
+└─ README.md
 ```
 
 ## 🚀 快速開始
@@ -21,22 +44,41 @@ NutriTag_TWHub/
    python -m venv .venv          # 建議使用虛擬環境
    source .venv/bin/activate     # macOS / Linux
    pip install -r requirements.txt
+
+   # Windows:
+   # .venv\Scripts\activate
    ```
+1. **安裝套件**
 
-2. **準備資料**
+```bash
+pip install -r requirements.txt
+```
 
+3. **準備資料**\
    將營養成分資料存成 `selected_columns.csv`，欄位需包含：
+
    - `食品分類`
    - `樣品名稱`
    - `粗蛋白(g)`、`粗脂肪(g)`、`飽和脂肪(g)`、`總碳水化合物(g)`、`糖質總量(g)`、`鈉(mg)`、`反式脂肪(mg)`、`酒精含量(g)` 等數值欄位
+4. **應用程式**
 
-3. **啟動應用程式**
+```bash
+streamlit run app.py
+```
 
-   ```bash
-   streamlit run app.py
-   ```
+在瀏覽器中開啟提示的 URL（通常是 `http://localhost:8501`）。
 
-   在瀏覽器中開啟提示的 URL（通常是 `http://localhost:8501`）。
+## 📊 使用流程說明
+
+於左側 Sidebar 選擇「食品分類」或輸入原料關鍵字
+
+透過分頁瀏覽或搜尋，將原料加入配方
+
+設定各原料比例（總和需為 100%）
+
+輸入每一份量與本包裝含量
+
+即時預覽營養標示，並下載 HTML 檔案
 
 ## 🛠 功能說明
 
@@ -74,6 +116,28 @@ python preprocess_nutritag_data.py
 - 新增更多營養成分欄位
 - 匯出 PDF/圖片格式的標示
 - 配合包裝設計建立可列印的排版
+
+## 📘 資料來源與免責聲明
+
+資料來源：
+
+本工具使用之原料營養成分資料，主要參考自：
+
+衛生福利部食品藥物管理署（TFDA）
+
+食品營養成分資料庫（新版）
+
+https://consumer.fda.gov.tw/Food/TFND.aspx?nodeID=178
+
+免責聲明：
+
+本工具僅作為食品研發、配方試算與營養標示規劃之輔助用途。
+
+實際產品營養標示數值，
+
+仍應以實際檢驗結果為準，
+
+並依「包裝食品營養標示應遵行事項」及相關法規進行最終確認。
 
 ---
 
