@@ -551,13 +551,12 @@ def generate_html_fragment(
             dv = daily_values.get(key)
             if dv:
                 dv_pct = per_serving / dv * 100
-                # right_col = f"{dv_pct:.1f} %"
                 right_col = f"{fmt_val(dv_pct)} %"
             else:
                 right_col = "*"
         else:
-            # right_col = f"{per_100g:.1f} {unit}"
-            right_col = f"{per_100g:.1f} {unit}"
+            # ✅ 關鍵修正：這裡也要用 fmt_val
+            right_col = f"{fmt_val(per_100g)} {unit}"
 
         rows_html += f"""
         <div class="nutrition-row">
