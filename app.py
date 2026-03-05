@@ -67,8 +67,40 @@ if "selected_items" not in st.session_state:
 # ==========================
 # Sidebar - 即時搜尋（分類 / 關鍵字）
 # ==========================
+st.sidebar.markdown(
+    "### 👇 從這裡開始\n"
+    "請依序加入原料並填寫比例"
+)
+
 st.sidebar.header("加入原料")
 
+# 新增空白原料（放在最前面）
+if st.sidebar.button("➕ 新增空白原料", use_container_width=True):
+    empty_row = {}
+    for col in st.session_state.selected_items.columns:
+        if col == "食品分類":
+            empty_row[col] = "自訂"
+        elif col == "樣品名稱":
+            empty_row[col] = "（請自行輸入原料名稱）"
+        elif col in NUMERIC_FIELDS:
+            empty_row[col] =  0.0
+        elif col == "比例(%)":
+            empty_row[col] = 0.0
+        else:
+            empty_row[col] = ""
+
+    st.session_state.selected_items = pd.concat(
+        [st.session_state.selected_items, pd.DataFrame([empty_row])],
+        ignore_index=True
+    )
+    st.sidebar.success("✅ 已新增空白原料，請在右側表格編輯")
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+st.sidebar.header("加入衛福部食品資料庫原料")
+
+# 接著才是原本的搜尋 / 分類
 search_keyword = st.sidebar.text_input(
     "🔍 搜尋原料名稱",
     placeholder="輸入關鍵字（例：糖、油、奶）",
@@ -80,19 +112,6 @@ food_category = st.sidebar.selectbox(
     ["全部分類"] + FOOD_CATEGORIES,
     key="ingredient_category"
 )
-
-# --- 篩選資料 ---
-browse_df = df.copy()
-
-if food_category != "全部分類":
-    browse_df = browse_df[browse_df["食品分類"] == food_category]
-
-if search_keyword:
-    browse_df = browse_df[
-        browse_df["樣品名稱"]
-        .astype(str)
-        .str.contains(search_keyword, case=False, na=False)
-    ]
 
 # --- 篩選資料 ---
 browse_df = df.copy()
@@ -127,10 +146,17 @@ if st.session_state.prev_search != (search_keyword, food_category):
 
 total = len(browse_df)
 
-# --- 若完全沒條件，不顯示 ---
-if not search_keyword and food_category == "全部分類":
-    st.sidebar.info("請輸入關鍵字或選擇食品分類")
-elif total == 0:
+# ==========================
+# Sidebar - 分頁瀏覽結果顯示
+# ==========================
+def prev_page():
+    st.session_state.browse_page = max(0, st.session_state.browse_page - 1)
+
+def next_page(total, page_size):
+    if (st.session_state.browse_page + 1) * page_size < total:
+        st.session_state.browse_page += 1
+
+if total == 0:
     st.sidebar.info("找不到符合條件的原料")
 else:
     start = st.session_state.browse_page * PAGE_SIZE
@@ -140,8 +166,12 @@ else:
     col_prev, col_info, col_next = st.sidebar.columns([1, 2, 1])
 
     with col_prev:
-        if st.button("⬅️", use_container_width=True):
-            st.session_state.browse_page = max(0, st.session_state.browse_page - 1)
+        st.button(
+            "⬅️",
+            use_container_width=True,
+            key="prev_page",
+            on_click=prev_page
+        )
 
     with col_info:
         st.caption(
@@ -149,19 +179,23 @@ else:
         )
 
     with col_next:
-        if st.button("➡️", use_container_width=True):
-            if end < total:
-                st.session_state.browse_page += 1
+        st.button(
+            "➡️",
+            use_container_width=True,
+            key="next_page",
+            on_click=next_page,
+            args=(total, PAGE_SIZE)
+        )
 
     st.sidebar.markdown("---")
 
     # --- 顯示目前頁 ---
-    for _, row in browse_df.iloc[start:end].iterrows():
+    for idx, row in browse_df.iloc[start:end].iterrows():
         name = row["樣品名稱"]
 
         if st.sidebar.button(
             f"➕ {name}",
-            key=f"add_{name}_{start}",
+            key=f"add_{idx}",
             use_container_width=True
         ):
             existing_names = (
@@ -304,63 +338,133 @@ with st.sidebar.expander("📘 資料來源與使用說明"):
 # ==========================
 # Selected ingredients table
 # ==========================
+def centered_success(text):
+    st.markdown(
+        f"""
+        <div style="
+            background-color: #d1fae5;
+            color: #065f46;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        ">
+            {text}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def centered_warning(text):
+    st.markdown(
+        f"""
+        <div style="
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        ">
+            {text}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 st.markdown("### 已選原料清單")
+st.info(
+    "👉 填寫表格最右側的「比例 (%)」\n"
+    "加總需為 100%，再點擊「套用比例修改」。"
+)
 
 if st.session_state.selected_items.empty:
     st.info("尚未加入任何原料。")
+
 else:
+    # --- 編輯表格 ---
     edited = st.data_editor(
         st.session_state.selected_items,
         use_container_width=True,
         hide_index=True,
         column_config={
             "比例(%)": st.column_config.NumberColumn(
-                "比例 (%)", min_value=0.0, max_value=100.0, step=0.1
+                "比例 (%) ← 請填寫",
+                min_value=0.0,
+                max_value=100.0,
+                step=0.1,
+                help="請填寫各原料比例，加總需為 100%"
             )
         }
     )
 
+    # --- 計算比例加總 ---
     total_ratio = edited["比例(%)"].sum()
-    if abs(total_ratio - 100) > 0.05:
-        st.warning("⚠️ 比例加總不等於 100%")
-    else:
-        st.success("✅ 比例加總為 100%")
+    is_ratio_valid = abs(total_ratio - 100) <= 0.05
 
-    if st.button("✔ 套用比例修改"):
-        st.session_state.selected_items = edited.copy()
-        st.success("已套用")
+    # --- 狀態提示（全寬＋置中，只顯示一次） ---
+    if not is_ratio_valid:
+        centered_warning(f"⚠️ 比例加總不等於 100%（目前 {total_ratio:.1f}%）")
+    else:
+        centered_success("✅ 比例加總為 100%")
+
+    # --- 套用比例（靠右，比例正確才可按） ---
+    col_spacer, col_apply = st.columns([4, 1.5])
+
+    with col_apply:
+        if st.button(
+            "✔ 套用比例修改",
+            type="primary",
+            use_container_width=True,
+            disabled=not is_ratio_valid
+        ):
+            st.session_state.selected_items = edited.copy()
+            centered_success("已套用")
+            
+    # 或是換這個更靠右的寫法
+    # col_l, col_c, col_r = st.columns([2, 1, 2])
+    # with col_c:
+    #     if st.button("✔ 套用比例修改"):
+    #         st.session_state.selected_items = edited.copy()
+    #         centered_success("已套用")
 
 # ==========================
 # 刪除原料功能
 # ==========================
 st.markdown("---")
-st.markdown("#### （選填）刪除原料")
 
-col_del_1, col_del_2 = st.columns([4, 1.5])
+with st.expander("🗑 （選填）刪除原料"):
+    col_del_1, col_del_2 = st.columns([4, 1.5])
 
-with col_del_1:
-    delete_options = [
-        f"{i+1}. {row['樣品名稱']}"
-        for i, row in st.session_state.selected_items.iterrows()
-    ]
+    with col_del_1:
+        delete_options = [
+            f"{i+1}. {row['樣品名稱']}"
+            for i, row in st.session_state.selected_items.iterrows()
+        ]
 
-    delete_target = st.selectbox(
-        "選擇要刪除的原料",
-        options=delete_options,
-        label_visibility="collapsed"
-    )
-
-with col_del_2:
-    if st.button("🗑 刪除此原料", type="primary", use_container_width=True):
-        idx_to_drop = delete_options.index(delete_target)
-
-        st.session_state.selected_items = (
-            st.session_state.selected_items
-            .drop(st.session_state.selected_items.index[idx_to_drop])
-            .reset_index(drop=True)
+        delete_target = st.selectbox(
+            "選擇要刪除的原料",
+            options=delete_options,
+            label_visibility="collapsed"
         )
 
-        st.rerun()
+    with col_del_2:
+        if st.button(
+            "刪除此原料",
+            type="primary",
+            use_container_width=True
+        ):
+            idx_to_drop = delete_options.index(delete_target)
+            st.session_state.selected_items = (
+                st.session_state.selected_items
+                .drop(st.session_state.selected_items.index[idx_to_drop])
+                .reset_index(drop=True)
+            )
+            st.rerun()
 
 # ==========================
 # Calculate nutrition (per 100g)
@@ -371,7 +475,10 @@ final_raw = {k: 0.0 for k in NUMERIC_FIELDS}
 for _, row in calc_df[calc_df["比例(%)"] > 0].iterrows():
     r = row["比例(%)"] / 100
     for col in NUMERIC_FIELDS:
-        final_raw[col] += pd.to_numeric(row[col], errors="coerce") * r
+        val = pd.to_numeric(row[col], errors="coerce")
+        if pd.isna(val):
+            val = 0.0
+        final_raw[col] += val * r
 
 label_data = {
     "protein": final_raw["粗蛋白(g)"],
@@ -723,4 +830,3 @@ st.download_button(
 )
 
 st.caption("下載後可直接列印或另存為 PDF，版面已依所選尺寸設定。")
-
