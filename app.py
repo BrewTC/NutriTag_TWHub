@@ -94,7 +94,11 @@ if st.sidebar.button("➕ 新增空白原料", use_container_width=True):
         ignore_index=True
     )
     st.sidebar.success("✅ 已新增空白原料，請在右側表格編輯")
-    st.rerun()
+    st.session_state._force_rerun = True
+    
+    if st.session_state.get("_force_rerun"):
+        st.session_state._force_rerun = False
+        st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -169,7 +173,8 @@ else:
         st.button(
             "⬅️",
             use_container_width=True,
-            key="prev_page",
+            key="prev_page", 
+            # key="btn_prev_page",
             on_click=prev_page
         )
 
@@ -183,6 +188,7 @@ else:
             "➡️",
             use_container_width=True,
             key="next_page",
+            # key="btn_next_page",
             on_click=next_page,
             args=(total, PAGE_SIZE)
         )
@@ -377,6 +383,50 @@ def centered_warning(text):
 
 
 st.markdown("### 已選原料清單")
+
+
+with st.expander("配方重量 → 比例估計（選填）", expanded=False):
+    st.caption("輸入各原料的實際重量（g），系統將自動換算為 100% 配方比例")
+
+    if st.session_state.selected_items.empty:
+        st.info("請先加入原料")
+    else:
+        weight_df = st.data_editor(
+            st.session_state.selected_items[["樣品名稱"]].assign(重量_g=0.0),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "重量_g": st.column_config.NumberColumn(
+                    "重量 (g)", min_value=0.0, step=1.0
+                )
+            },
+            key="recipe_weight_editor"
+        )
+
+        if st.button("🔁 依重量換算比例"):
+            total_weight = weight_df["重量_g"].sum()
+
+            if total_weight <= 0:
+                st.warning("總重量必須大於 0")
+            else:
+                ratio_map = (
+                    weight_df
+                    .assign(比例=lambda d: d["重量_g"] / total_weight * 100)
+                    .set_index("樣品名稱")["比例"]
+                )
+
+                # ✅ 回寫到 selected_items
+                for i, row in st.session_state.selected_items.iterrows():
+                    name = row["樣品名稱"]
+                    if name in ratio_map:
+                        st.session_state.selected_items.loc[i, "比例(%)"] = round(
+                            ratio_map[name], 1
+                        )
+
+                st.success("✅ 已依重量自動換算比例")
+                st.rerun()
+
+
 st.info(
     "👉 填寫表格最右側的「比例 (%)」\n"
     "加總需為 100%，再點擊「套用比例修改」。"
@@ -542,12 +592,13 @@ def generate_html_fragment(
     <style>
         .nutrition-box {{
             --box-padding: 12px;
-
             border: 2px solid #000;
             padding: var(--box-padding);
-            font-family: "Microsoft JhengHei", sans-serif;
+            padding-bottom: 36px;   /* ✅ 新增 */
+            font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
             background: #fff;
             box-sizing: border-box;
+            position: relative;     /* ✅ 新增 */
         }}
 
         /* ===== 共用：讓結構線左右貼齊外框 ===== */
@@ -614,9 +665,13 @@ def generate_html_fragment(
         }}
 
         .nutrition-dv-note {{
+            position: absolute;
+            bottom: 8px;
+            left: var(--box-padding);
+            right: var(--box-padding);
+
             font-size: 11px;
-            line-height: 1.4;
-            margin-top: 6px;
+            line-height: 1.35;
             color: #000;
         }}
 
@@ -806,7 +861,7 @@ html_fragment = generate_html_fragment(
 
 components.html(
     html_fragment,
-    height=700 if label_size == "A4 列印版" else 420,
+    height=420,
     scrolling=True
 )
 
