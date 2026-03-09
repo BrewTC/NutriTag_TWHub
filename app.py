@@ -386,10 +386,12 @@ st.markdown("### 已選原料清單")
 
 
 with st.expander("配方重量 → 比例估計（選填）", expanded=False):
+
     st.caption("輸入各原料的實際重量（g），系統將自動換算為 100% 配方比例")
 
     if st.session_state.selected_items.empty:
         st.info("請先加入原料")
+
     else:
         weight_df = st.data_editor(
             st.session_state.selected_items[["樣品名稱"]].assign(重量_g=0.0),
@@ -400,15 +402,32 @@ with st.expander("配方重量 → 比例估計（選填）", expanded=False):
                     "重量 (g)", min_value=0.0, step=1.0
                 )
             },
-            key="recipe_weight_editor"
+            key=f"recipe_weight_editor_{len(st.session_state.selected_items)}"
         )
 
-        if st.button("🔁 依重量換算比例"):
+        # ✅ 按鈕 + 訊息：同一列
+        col_btn, col_msg = st.columns([1, 2])
+
+        with col_btn:
+            clicked = st.button("🔁 依重量換算比例")
+
+        with col_msg:
+            if st.session_state.get("recipe_ratio_success"):
+                st.success("已更新配方比例", icon="✅")
+
+        # ✅ 按鈕邏輯
+        if clicked:
             total_weight = weight_df["重量_g"].sum()
 
             if total_weight <= 0:
                 st.warning("總重量必須大於 0")
+                # 若失敗，確保不顯示成功訊息
+                st.session_state.recipe_ratio_success = False
+
             else:
+                # ✅ 儲存原料總重量（供後續產出率校正使用）
+                st.session_state.raw_batch_weight_from_recipe = total_weight
+
                 ratio_map = (
                     weight_df
                     .assign(比例=lambda d: d["重量_g"] / total_weight * 100)
@@ -423,9 +442,11 @@ with st.expander("配方重量 → 比例估計（選填）", expanded=False):
                             ratio_map[name], 1
                         )
 
-                st.success("✅ 已依重量自動換算比例")
+                # ✅ 設定成功狀態，供右側顯示
+                st.session_state.recipe_ratio_success = True
                 st.rerun()
 
+st.caption("✏️ 配方比例為即時試算，修改後會立即更新營養標示結果")
 
 st.info(
     "👉 填寫表格最右側的「比例 (%)」\n"
@@ -454,7 +475,7 @@ else:
 
     # --- 計算比例加總 ---
     total_ratio = edited["比例(%)"].sum()
-    is_ratio_valid = abs(total_ratio - 100) <= 0.05
+    is_ratio_valid = abs(total_ratio - 100) <= 1 # 0.05
 
     # --- 狀態提示（全寬＋置中，只顯示一次） ---
     if not is_ratio_valid:
@@ -467,7 +488,7 @@ else:
 
     with col_apply:
         if st.button(
-            "✔ 套用比例修改",
+            "✔ 確認目前比例",
             type="primary",
             use_container_width=True,
             disabled=not is_ratio_valid
@@ -517,6 +538,18 @@ with st.expander("🗑 （選填）刪除原料"):
             st.rerun()
 
 # ==========================
+# Yield Adjustment Defaults (IMPORTANT)
+# ==========================
+use_yield_adjust = False
+est_yield = None
+
+DEFAULT_RAW_WEIGHT = 100.0
+
+raw_weight_from_recipe = st.session_state.get(
+    "raw_batch_weight_from_recipe",
+    DEFAULT_RAW_WEIGHT
+)
+# ==========================
 # Calculate nutrition (per 100g)
 # ==========================
 calc_df = st.session_state.selected_items.copy()
@@ -530,15 +563,80 @@ for _, row in calc_df[calc_df["比例(%)"] > 0].iterrows():
             val = 0.0
         final_raw[col] += val * r
 
+
+# ============================================================================================================================================================
+# ==========================
+# Yield Adjustment (Optional)
+# ==========================
+with st.expander("⚖️ 產出率校正（選填）", expanded=False):
+
+    use_yield_adjust = st.checkbox(
+        "啟用成品重量校正（依實際秤量回推產出率）",
+        value=False
+    )
+
+    raw_batch_weight = st.number_input(
+        "原料總重量（g）",
+        min_value=1.0,
+        value=float(raw_weight_from_recipe),
+        step=10.0,
+        disabled=not use_yield_adjust,
+        key="raw_batch_weight_input"
+    )
+
+    # ✅ UX 提示（你要求的）
+    if use_yield_adjust and "raw_batch_weight_from_recipe" in st.session_state:
+        st.caption("✅ 原料總重量已自動帶入自「配方重量 → 比例估計」")
+
+    final_batch_weight = st.number_input(
+        "成品總重量（g）",
+        min_value=1.0,
+        value=100.0,
+        step=10.0,
+        disabled=not use_yield_adjust
+    )
+
+    if use_yield_adjust and raw_batch_weight > 0:
+        est_yield = final_batch_weight / raw_batch_weight
+        st.caption(f"📐 估算成品產出率（Yield）＝ {est_yield:.3f}")
+
+        if est_yield < 0.3:
+            st.warning("⚠️ 產出率偏低，常見於乾燥／濃縮產品")
+        elif est_yield > 3.0:
+            st.warning("⚠️ 產出率偏高，請確認是否為吸水產品")
+# ==========================
+# Apply Yield Adjustment
+# ==========================
+final_corrected = final_raw.copy()
+
+if use_yield_adjust and est_yield and est_yield > 0:
+    final_corrected = {
+        k: v / est_yield
+        for k, v in final_raw.items()
+    }
+
+
+# label_data = {
+#     "protein": final_raw["粗蛋白(g)"],
+#     "fat": final_raw["粗脂肪(g)"],
+#     "saturatedFat": final_raw["飽和脂肪(g)"],
+#     "carbs": final_raw["總碳水化合物(g)"],
+#     "sugar": final_raw["糖質總量(g)"],
+#     "sodium": final_raw["鈉(mg)"],
+#     "transFat": final_raw["反式脂肪(mg)"],
+# }
+
+
 label_data = {
-    "protein": final_raw["粗蛋白(g)"],
-    "fat": final_raw["粗脂肪(g)"],
-    "saturatedFat": final_raw["飽和脂肪(g)"],
-    "carbs": final_raw["總碳水化合物(g)"],
-    "sugar": final_raw["糖質總量(g)"],
-    "sodium": final_raw["鈉(mg)"],
-    "transFat": final_raw["反式脂肪(mg)"],
+    "protein": final_corrected["粗蛋白(g)"],
+    "fat": final_corrected["粗脂肪(g)"],
+    "saturatedFat": final_corrected["飽和脂肪(g)"],
+    "carbs": final_corrected["總碳水化合物(g)"],
+    "sugar": final_corrected["糖質總量(g)"],
+    "sodium": final_corrected["鈉(mg)"],
+    "transFat": final_corrected["反式脂肪(mg)"],
 }
+# ============================================================================================================================================================
 
 label_data["calories"] = round(
     label_data["protein"] * 4 +
@@ -547,10 +645,15 @@ label_data["calories"] = round(
     1
 )
 
+
+
+
 # ==========================
 # Serving size input
 # ==========================
 st.markdown("### 營養標示計算結果")
+
+st.caption("📊 以下結果為即時試算值（僅供配方規劃參考）")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -665,14 +768,19 @@ def generate_html_fragment(
         }}
 
         .nutrition-dv-note {{
-            position: absolute;
-            bottom: 8px;
-            left: var(--box-padding);
-            right: var(--box-padding);
+            # position: absolute;
+            # bottom: 8px;
+            # left: var(--box-padding);
+            # right: var(--box-padding);
+
+            # font-size: 11px;
+            # line-height: 1.35;
+            # color: #000;
 
             font-size: 11px;
             line-height: 1.35;
             color: #000;
+            margin-top: 6px;
         }}
 
         {size_css}
@@ -734,8 +842,7 @@ def generate_html_fragment(
             dv_note_html = """
             <div class="nutrition-dv-note">
                 <br>
-                每日參考值：熱量 2000 大卡、蛋白質 60 公克、脂肪 60 公克、飽和脂肪 18 公克、
-                碳水化合物 300 公克、鈉 2000 毫克。
+                每日參考值:熱量 2000 大卡、蛋白質 60 公克、脂肪 60 公克、飽和脂肪 18 公克、碳水化合物 300 公克、鈉 2000 毫克。
             </div>
             """
 
@@ -766,7 +873,7 @@ def wrap_full_html(fragment):
 st.markdown("### 標籤輸出設定")
 
 label_size = st.radio(
-    "選擇標籤尺寸（測試版）",
+    "選擇標籤尺寸",
     [
         "標籤 9 × 8.5 cm（建議）",
         "標籤 9 × 8 cm",
